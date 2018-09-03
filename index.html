@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>test</title>
+</head>
+<body>
+<div id="app">
+    <input type="text" v-model="text">
+    {{ text }}
+</div>
+<script src="promise.js"></script>
+<script type="text/javascript">
+    (function () {
+        let p = new Promise(function (resolve, reject) {
+//            setTimeout(function () {
+            if (resolve) {
+                resolve(1)
+            } else if (reject) {
+                reject(2)
+            }
+//            }, 0)
+        });
+
+        p.then(function (d) {
+            console.log(d);
+            return d
+        }).then(function (data) {
+            console.log('data1:' + data);
+            return 2
+        }).then(function (data) {
+            console.log('data2:' + data)
+        })
+    })();
+</script>
+</body>
+
+<script>
+    // 编译
+    function compile (node, vm) {
+        let reg = /\{\{(.*)\}\}/;
+        // 节点类型为元素
+        if (node.nodeType === 1) {
+            let attr = node.attributes;
+            // 解析属性
+            for (let i = 0; i < attr.length; i++) {
+                if (attr[i].nodeName === 'v-model') {
+                    var name = attr[i].nodeValue; // 获取v-model绑定的属性名
+                    node.addEventListener('input', function (e) {
+                        // 给相应的data属性赋值，进而触发该属性的set方法
+                        vm[name] = e.target.value;
+                    });
+                    node.value = vm[name]; // 将data的值赋给该node
+                    node.removeAttribute('v-model');
+                }
+            }
+
+            new Watcher(vm, node, name, 'input');
+        }
+        // 节点类型为text
+        if (node.nodeType === 3) {
+            if (reg.test(node.nodeValue)) {
+                let name = RegExp.$1.trim(); // 获取匹配到的字符串
+                // node.nodeValue = vm[name]; // 将data的值赋给该node
+                new Watcher(vm, node, name, 'text');
+            }
+        }
+    }
+
+    // 劫持
+    function nodeToFragment (node, vm) {
+        let flag = document.createDocumentFragment();   // 创建一个空白的文档片段
+        let child;
+        while (child = node.firstChild) {
+            compile(child, vm);
+            flag.appendChild(child); // 将子节点劫持到文档片段中
+        }
+        return flag;
+    }
+
+    // 观察者
+    function observe (obj, vm) {
+        Object.keys(obj).forEach(function (key) {
+            defineReactive(vm, key, obj[key]);
+        });
+    }
+
+    // 设置访问器
+    function defineReactive (obj, key, val) { // vue text hello,world
+        let dep = new Dep();
+
+        Object.defineProperty(obj, key, {
+            get: function () {
+                if (Dep.target) dep.addSub(Dep.target); // 如果双向绑定了放到数组里
+                return val;
+            },
+            set: function (newVal) {
+                if (newVal === val) return;
+                val = newVal;
+                // 作为发布者发出通知
+                dep.notify();
+            }
+        });
+    }
+
+    class Watcher {
+        constructor (vm, node, name, nodeType) {
+            Dep.target = this;
+            this.name = name;
+            this.node = node;
+            this.vm = vm;
+            this.nodeType = nodeType;
+            this.update();
+            Dep.target = null;
+        }
+
+        update () {
+            this.get();
+            if (this.nodeType === 'text') {
+                this.node.nodeValue = this.value;
+            }
+            if (this.nodeType === 'input') {
+                this.node.value = this.value;
+            }
+        }
+
+        // 获取data中的属性值
+        get () {
+            this.value = this.vm[this.name];
+        }
+    }
+
+    class Dep {
+        constructor () {
+            this.subs = [];
+        }
+
+        addSub (sub) {
+            this.subs.push(sub);
+        }
+
+        notify () {
+            this.subs.forEach(function (sub) {
+                console.log(sub);
+                sub.update();
+            });
+        }
+    }
+
+    function Vue (options) {
+        this.data = options.data;
+        let data = this.data;
+
+        observe(data, this);
+
+        let id = options.el;
+        let dom = nodeToFragment(document.getElementById(id), this);
+        // 编译完成后，将dom返回到app中
+        document.getElementById(id).appendChild(dom);
+    }
+
+    let vm = new Vue({
+        el: 'app',
+        data: {
+            text: 'hello world'
+        }
+    });
+
+</script>
+</html>
